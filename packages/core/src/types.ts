@@ -96,7 +96,7 @@ export type ExtractStateValue<
   : {
       [K in keyof TSS]?:
         | (TSS[K] extends { states: any } ? keyof TSS[K]['states'] : never)
-        | ExtractStateValue<TSS[K]>;
+        | ExtractStateValue<TSS[K]>
     };
 
 export interface HistoryValue {
@@ -280,7 +280,7 @@ export type StateNodesConfig<
     TContext,
     TStateSchema['states'][K],
     TEvent
-  >;
+  >
 };
 
 export type StatesConfig<
@@ -292,7 +292,7 @@ export type StatesConfig<
     TContext,
     TStateSchema['states'][K],
     TEvent
-  >;
+  >
 };
 
 export type StatesDefinition<
@@ -304,7 +304,7 @@ export type StatesDefinition<
     TContext,
     TStateSchema['states'][K],
     TEvent
-  >;
+  >
 };
 
 export type TransitionConfigTargetShortcut<
@@ -321,7 +321,7 @@ type TransitionsConfigMap<TContext, TEvent extends EventObject> = {
       > & {
         event?: undefined;
       })
-  >;
+  >
 };
 
 type TransitionsConfigArray<TContext, TEvent extends EventObject> = Array<
@@ -331,7 +331,7 @@ type TransitionsConfigArray<TContext, TEvent extends EventObject> = Array<
       K extends TEvent['type'] ? Extract<TEvent, { type: K }> : EventObject
     > & {
       event: K;
-    };
+    }
   }[TEvent['type'] | NullEvent['type'] | '*']
 >;
 
@@ -661,19 +661,6 @@ export interface ActivityMap {
   [activityKey: string]: ActivityDefinition<any, any> | false;
 }
 
-// tslint:disable-next-line:class-name
-export interface StateTransition<TContext, TEvent extends EventObject> {
-  transitions: Array<TransitionDefinition<TContext, TEvent>>;
-  configuration: Array<StateNode<TContext>>;
-  entrySet: Array<StateNode<TContext>>;
-  exitSet: Array<StateNode<TContext>>;
-  /**
-   * The source state that preceded the transition.
-   */
-  source: State<TContext> | undefined;
-  actions: Array<ActionObject<TContext, TEvent>>;
-}
-
 export interface TransitionData<TContext, TEvent extends EventObject> {
   value: StateValue | undefined;
   actions: ActionMap<TContext, TEvent>;
@@ -843,7 +830,7 @@ export type PropertyAssigner<TContext, TEvent extends EventObject> = {
         event: TEvent,
         meta: AssignMeta<TContext, TEvent>
       ) => TContext[K])
-    | TContext[K];
+    | TContext[K]
 };
 
 export type Mapper<TContext, TEvent extends EventObject> = (
@@ -891,7 +878,7 @@ export type TransitionDefinitionMap<TContext, TEvent extends EventObject> = {
       TContext,
       K extends TEvent['type'] ? Extract<TEvent, { type: K }> : EventObject
     >
-  >;
+  >
 };
 
 export interface DelayedTransitionDefinition<

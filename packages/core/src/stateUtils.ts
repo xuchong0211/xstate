@@ -1,5 +1,6 @@
 import { EventObject, StateNode, StateValue } from '.';
-import { keys, flatten } from './utils';
+import { TransitionDefinition } from './types';
+import { keys, flatten, intersects, uniq } from './utils';
 
 type Configuration<TC, TE extends EventObject> = Iterable<
   StateNode<TC, any, TE>
@@ -179,16 +180,216 @@ export function isInFinalState(
   configuration: StateNode[],
   stateNode: StateNode
 ): boolean {
-  if (stateNode.type === 'compound') {
-    return getChildren(stateNode).some(
-      s => s.type === 'final' && has(configuration, s)
-    );
+  switch (stateNode.type) {
+    case 'compound':
+      return getChildStates(stateNode).some(
+        s => s.type === 'final' && has(configuration, s)
+      );
+    case 'parallel':
+      return getChildStates(stateNode).every(sn =>
+        isInFinalState(configuration, sn)
+      );
+    default:
+      return false;
   }
-  if (stateNode.type === 'parallel') {
-    return getChildren(stateNode).every(sn =>
-      isInFinalState(configuration, sn)
-    );
+}
+
+export function isDescendant<TContext, TEvent extends EventObject>(
+  possibleDescendantState: StateNode<TContext, any, TEvent, any>,
+  possibleAncestorState: StateNode<TContext, any, TEvent, any>
+): boolean {
+  let parent: StateNode<
+    TContext,
+    any,
+    TEvent,
+    any
+  > | void = possibleDescendantState;
+
+  while ((parent = parent.parent)) {
+    if (parent === possibleAncestorState) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getProperAncestors(
+  descendantState: StateNode<any, any, any, any>,
+  upToState: StateNode<any, any, any, any> | null
+) {
+  const ancestors: Array<StateNode<any, any, any, any>> = [];
+
+  let parent: StateNode<any, any, any, any> | void = descendantState;
+
+  while ((parent = parent.parent)) {
+    if (descendantState === upToState) {
+      return ancestors;
+    }
+    ancestors.push(parent);
+  }
+  return ancestors;
+}
+
+function findLeastCommonCompoundAncestor(
+  states: Array<StateNode<any, any, any, any>>
+) {
+  const [head, ...tail] = states;
+  const headAncestors = getProperAncestors(head, null).filter(
+    state => state.type === 'compound' || !state.parent
+  );
+  return headAncestors.find(ancestor =>
+    tail.every(state => isDescendant(state, ancestor))
+  ) as StateNode<any, any, any, any>;
+}
+
+function getEffectiveTargetStates<TContext, TEvent extends EventObject>(
+  transition: TransitionDefinition<TContext, TEvent>
+) {
+  const targets: Array<StateNode<any, any, any, any>> = [];
+
+  for (const target of transition.target!) {
+    // TODO: implemenet history handling
+    targets.push(target);
   }
 
-  return false;
+  return targets;
+}
+
+export function getTransitionDomain<TContext, TEvent extends EventObject>(
+  transition: TransitionDefinition<TContext, TEvent>
+) {
+  const targetStates = getEffectiveTargetStates(transition);
+
+  if (
+    transition.internal &&
+    transition.source.type === 'compound' &&
+    targetStates.every(state => isDescendant(state, transition.source))
+  ) {
+    return transition.source;
+  }
+
+  return findLeastCommonCompoundAncestor(
+    targetStates.concat(transition.source)
+  );
+}
+
+export function computeExitSet<TContext, TEvent extends EventObject>(
+  configuration: Array<StateNode<TContext>>,
+  transitions: Array<TransitionDefinition<TContext, TEvent>>
+) {
+  return flatten(
+    transitions
+      .filter(transition => transition.target)
+      .map(transition => {
+        const domain = getTransitionDomain(transition);
+        return configuration.filter(state => isDescendant(state, domain));
+      })
+  ).sort((a, b) => b.order - a.order);
+}
+
+export function removeConflictingTransitions<
+  TContext,
+  TEvent extends EventObject
+>(
+  configuration: Array<StateNode<TContext>>,
+  transitions: Array<TransitionDefinition<TContext, TEvent>>
+): Array<TransitionDefinition<TContext, TEvent>> {
+  const filtered = [transitions[0]];
+
+  for (let i = 1; i < transitions.length; i++) {
+    let enabledTransition = transitions[i];
+    let enabledTransitionPreempted = false;
+    const transitionsToRemove: Array<
+      TransitionDefinition<TContext, TEvent>
+    > = [];
+    for (const filteredTransition of filtered) {
+      if (
+        intersects(
+          computeExitSet(configuration, [enabledTransition]),
+          computeExitSet(configuration, [filteredTransition])
+        )
+      ) {
+        if (isDescendant(enabledTransition.source, filteredTransition.source)) {
+          transitionsToRemove.push(filteredTransition);
+        } else {
+          enabledTransitionPreempted = true;
+          break;
+        }
+      }
+    }
+    if (!enabledTransitionPreempted) {
+      for (const transitionToRemove of transitionsToRemove) {
+        filtered.splice(filtered.indexOf(transitionToRemove), 1);
+      }
+      filtered.push(enabledTransition);
+    }
+  }
+
+  return filtered;
+}
+
+function getChildStates(state: StateNode) {
+  return keys(state.states)
+    .map(key => state.states[key])
+    .filter(state => state.type !== 'history');
+}
+
+function getDescendantStatesToEnter<TContext>(
+  state: StateNode<TContext>
+): Array<StateNode<TContext>> {
+  // TODO: handle history
+  switch (state.type) {
+    case 'compound':
+      // this should always be defined (or first in order should be picked as default)
+      // but that would be a breaking change right now
+      if (state.initial) {
+        // TODO: handle nested initial states
+        return [state, state.states[state.initial as string]];
+      }
+      return [state];
+    case 'parallel':
+      return flatten(getChildStates(state).map(getDescendantStatesToEnter));
+    default:
+      return [state];
+  }
+}
+
+function getAncestorStatesToEnter(
+  state: StateNode,
+  upToState: StateNode
+): Array<StateNode> {
+  return flatten(
+    getProperAncestors(state, upToState).map(ancestor => {
+      return ancestor.type === 'parallel'
+        ? [
+            ancestor,
+            ...flatten(getChildStates(state).map(getDescendantStatesToEnter))
+          ]
+        : [ancestor];
+    })
+  );
+}
+
+export function computeEntrySet<TContext, TEvent extends EventObject>(
+  transitions: Array<TransitionDefinition<TContext, TEvent>>
+): Array<StateNode<TContext>> {
+  return uniq(
+    flatten(
+      transitions.map(transition => {
+        if (!transition.target) {
+          return [];
+        }
+        const descendantStates = flatten(
+          transition.target.map(getDescendantStatesToEnter)
+        );
+        const domainAncestor = getTransitionDomain(transition);
+        const ancestorStates = flatten(
+          getEffectiveTargetStates(transition).map(targetState =>
+            getAncestorStatesToEnter(targetState, domainAncestor)
+          )
+        );
+        return [...descendantStates, ...ancestorStates];
+      })
+    )
+  ).sort((a, b) => a.order - b.order);
 }
