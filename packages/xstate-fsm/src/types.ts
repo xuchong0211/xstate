@@ -11,7 +11,7 @@ export namespace StateMachine {
 
   export interface ActionObject<TContext, TEvent> {
     type: string;
-    exec?: (context: TContext, event: TEvent) => void;
+    exec?: (context: TContext, event?: TEvent) => void;
     [key: string]: any;
   }
 

@@ -156,6 +156,15 @@ export function createMachine<
   };
 }
 
+const executeStateActions = <
+  TContext,
+  TEvent extends EventObject = any,
+  TState extends Typestate<TContext> = any
+>(
+  state: StateMachine.State<TContext, TEvent, TState>,
+  event?: TEvent
+) => state.actions.forEach(({ exec }) => exec && exec(state.context, event));
+
 export function interpret<
   TContext,
   TEvent extends EventObject = any,
@@ -173,9 +182,7 @@ export function interpret<
         return;
       }
       state = machine.transition(state, event);
-      state.actions.forEach(
-        ({ exec }) => exec && exec(state.context, toEventObject(event))
-      );
+      executeStateActions(state, toEventObject(event));
       listeners.forEach(listener => listener(state));
     },
     subscribe: (listener: StateMachine.StateListener<typeof state>) => {
@@ -186,7 +193,11 @@ export function interpret<
         unsubscribe: () => listeners.delete(listener)
       };
     },
-    start: () => ((started = true), service),
+    start: () => {
+      started = true;
+      executeStateActions(state);
+      return service;
+    },
     stop: () => (
       (started = false),
       listeners.forEach(listener => listeners.delete(listener)),
