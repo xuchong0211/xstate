@@ -101,7 +101,17 @@ function getValueFromAdj<TC, TE extends EventObject>(
   baseNode: StateNode<TC, any, TE>,
   adjList: AdjList<TC, TE>
 ): StateValue {
-  const childStateNodes = adjList.get(baseNode);
+  let childStateNodes = adjList.get(baseNode);
+
+  if (!childStateNodes) {
+    for (let adj of adjList) {
+      let k = adj[0];
+      let v = adj[1];
+      if (baseNode.id === k.id) {
+        childStateNodes = v
+      }
+    }
+  }
 
   if (!childStateNodes) {
     return {}; // todo: fix?

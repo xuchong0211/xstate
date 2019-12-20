@@ -131,13 +131,13 @@ export class Interpreter<
     deferEvents: true,
     clock: {
       setTimeout: (fn, ms) => {
-        return global.setTimeout.call(null, fn, ms);
+        return setTimeout.call(null, fn, ms);
       },
       clearTimeout: id => {
-        return global.clearTimeout.call(null, id);
+        return clearTimeout.call(null, id);
       }
     },
-    logger: global.console.log.bind(console),
+    logger: console.log.bind(console),
     devTools: false
   }))(typeof window === 'undefined' ? global : window);
   /**
