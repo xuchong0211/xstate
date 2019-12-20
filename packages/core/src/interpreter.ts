@@ -126,7 +126,7 @@ export class Interpreter<
    * - `clock` uses the global `setTimeout` and `clearTimeout` functions
    * - `logger` uses the global `console.log()` method
    */
-  public static defaultOptions: InterpreterOptions = (global => ({
+  public static defaultOptions: InterpreterOptions = (() => ({
     execute: true,
     deferEvents: true,
     clock: {
@@ -139,7 +139,7 @@ export class Interpreter<
     },
     logger: console.log.bind(console),
     devTools: false
-  }))(typeof window === 'undefined' ? global : window);
+  }))();
   /**
    * The current state of the interpreted machine.
    */

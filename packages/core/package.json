@@ -1,5 +1,5 @@
 {
-  "name": "xstate",
+  "name": "xstate-wechat-app",
   "version": "4.7.3",
   "description": "Finite State Machines and Statecharts for the Modern Web.",
   "main": "lib/index.js",

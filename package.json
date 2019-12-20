@@ -1,6 +1,5 @@
 {
-  "name": "xstate-monorepo",
-  "private": true,
+  "name": "xstate-weapp",
   "description": "Finite State Machines and Statecharts for the Modern Web.",
   "workspaces": {
     "packages": [
